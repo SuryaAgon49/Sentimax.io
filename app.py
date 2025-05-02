@@ -7,34 +7,34 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 from collections import Counter
+import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from wordcloud import WordCloud
-import nltk
 import base64
 from io import BytesIO
 import datetime
 import json
 import matplotlib.pyplot as plt
 import logging
-import nltk
-
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, 
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Download required NLTK data safely
+# Specify NLTK data path for Render.com (ensure this directory exists)
+nltk_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nltk_data')
+os.makedirs(nltk_data_path, exist_ok=True)
+nltk.data.path.append(nltk_data_path)
+
+# Download required NLTK data safely with proper exception handling
 try:
-    nltk.download('punkt', quiet=True)
-    nltk.download('stopwords', quiet=True)
-    nltk.download('vader_lexicon', quiet=True)
+    nltk.download('punkt', download_dir=nltk_data_path, quiet=True)
+    nltk.download('stopwords', download_dir=nltk_data_path, quiet=True)
+    nltk.download('vader_lexicon', download_dir=nltk_data_path, quiet=True)
+    logger.info(f"NLTK resources downloaded to {nltk_data_path}")
 except Exception as e:
     logger.error(f"Failed to download NLTK data: {e}")
 
@@ -46,9 +46,10 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
 # Create uploads folder if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Initialize sentiment analyzer
+# Initialize sentiment analyzer with proper error handling
 try:
     sia = SentimentIntensityAnalyzer()
+    logger.info("SentimentIntensityAnalyzer initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize SentimentIntensityAnalyzer: {e}")
     sia = None
@@ -77,10 +78,22 @@ def preprocess_text(text):
         # Remove special characters and digits
         text = re.sub(r'[^\w\s]', '', text)
         text = re.sub(r'\d+', '', text)
-        # Tokenize the text
-        tokens = word_tokenize(text)
-        # Remove stopwords
-        stop_words = set(stopwords.words('english'))
+        
+        # Handle NLTK tokenization safely
+        try:
+            tokens = word_tokenize(text)
+        except LookupError:
+            # Fallback to simple whitespace tokenization if NLTK fails
+            logger.warning("NLTK tokenizer failed, using basic whitespace splitting")
+            tokens = text.split()
+        
+        # Handle stopwords safely
+        try:
+            stop_words = set(stopwords.words('english'))
+        except LookupError:
+            logger.warning("NLTK stopwords not available, using empty stopwords set")
+            stop_words = set()
+        
         tokens = [word for word in tokens if word not in stop_words and len(word) > 2]
         return tokens, ' '.join(tokens)
     except Exception as e:
@@ -93,6 +106,7 @@ def analyze_sentiment(text):
         if sia:
             sentiment_score = sia.polarity_scores(text)
             return sentiment_score['compound']
+        logger.warning("SentimentIntensityAnalyzer not available, returning 0 sentiment")
         return 0
     except Exception as e:
         logger.error(f"Error analyzing sentiment: {e}")
@@ -164,6 +178,11 @@ def generate_plots(comments_data):
     plots = {}
     
     try:
+        # Check if we have any data to process
+        if len(comments_data) == 0:
+            logger.warning("No comments data to generate plots")
+            return plots
+            
         # Create sentiment distribution histogram with Plotly
         fig_sentiment = px.histogram(
             comments_data, 
@@ -181,123 +200,140 @@ def generate_plots(comments_data):
         plots['sentiment_dist'] = get_plotly_url(fig_sentiment)
         
         # Create feedback type distribution pie chart with Plotly
-        feedback_counts = comments_data['feedback_type'].value_counts()
-        fig_feedback = px.pie(
-            values=feedback_counts.values,
-            names=feedback_counts.index,
-            title='Feedback Type Distribution'
-        )
-        fig_feedback.update_layout(
-            width=800,
-            height=600
-        )
-        plots['feedback_dist'] = get_plotly_url(fig_feedback)
+        if not comments_data['feedback_type'].empty:
+            feedback_counts = comments_data['feedback_type'].value_counts()
+            fig_feedback = px.pie(
+                values=feedback_counts.values,
+                names=feedback_counts.index,
+                title='Feedback Type Distribution'
+            )
+            fig_feedback.update_layout(
+                width=800,
+                height=600
+            )
+            plots['feedback_dist'] = get_plotly_url(fig_feedback)
         
         # Create top 15 words bar chart with Plotly
         word_counts = Counter()
         for tokens in comments_data['tokens']:
-            word_counts.update(tokens)
+            if tokens:  # Only process if tokens is not empty
+                word_counts.update(tokens)
         
-        top_words = dict(word_counts.most_common(15))
-        fig_top_words = px.bar(
-            x=list(top_words.values()),
-            y=list(top_words.keys()),
-            orientation='h',
-            title='Top 15 Words'
-        )
-        fig_top_words.update_layout(
-            xaxis_title='Frequency',
-            yaxis_title='',
-            width=600,
-            height=400
-        )
-        plots['top_words'] = get_plotly_url(fig_top_words)
-        
-        # Create comments by topic horizontal bar chart with Plotly
-        topic_counts = comments_data['topic'].value_counts().reset_index()
-        topic_counts.columns = ['topic', 'count']
-        fig_topics = px.bar(
-            topic_counts,
-            x='count',
-            y='topic',
-            orientation='h',
-            title='Comments by Topic'
-        )
-        fig_topics.update_layout(
-            xaxis_title='Count',
-            yaxis_title='',
-            width=600,
-            height=400
-        )
-        plots['comments_by_topic'] = get_plotly_url(fig_topics)
-        
-        # Create sentiment trend line chart with Plotly
-        # Group by week and calculate average sentiment
-        comments_data['date'] = pd.to_datetime(comments_data['date'])
-        if len(comments_data) > 1:  # Only create trend if we have multiple data points
-            weekly_sentiment = comments_data.groupby(pd.Grouper(key='date', freq='W'))['sentiment'].mean().reset_index()
-            
-            fig_trend = px.line(
-                weekly_sentiment,
-                x='date',
-                y='sentiment',
-                markers=True,
-                title='Sentiment Trend'
+        if word_counts:
+            top_words = dict(word_counts.most_common(15))
+            fig_top_words = px.bar(
+                x=list(top_words.values()),
+                y=list(top_words.keys()),
+                orientation='h',
+                title='Top 15 Words'
             )
-            fig_trend.add_hline(y=0, line_color='gray', line_dash='dash', opacity=0.7)
-            fig_trend.update_layout(
-                xaxis_title='Week',
-                yaxis_title='Avg Sentiment',
+            fig_top_words.update_layout(
+                xaxis_title='Frequency',
+                yaxis_title='',
                 width=600,
                 height=400
             )
-            plots['sentiment_trend'] = get_plotly_url(fig_trend)
+            plots['top_words'] = get_plotly_url(fig_top_words)
+        
+        # Create comments by topic horizontal bar chart with Plotly
+        if not comments_data['topic'].empty:
+            topic_counts = comments_data['topic'].value_counts().reset_index()
+            topic_counts.columns = ['topic', 'count']
+            fig_topics = px.bar(
+                topic_counts,
+                x='count',
+                y='topic',
+                orientation='h',
+                title='Comments by Topic'
+            )
+            fig_topics.update_layout(
+                xaxis_title='Count',
+                yaxis_title='',
+                width=600,
+                height=400
+            )
+            plots['comments_by_topic'] = get_plotly_url(fig_topics)
+        
+        # Create sentiment trend line chart with Plotly
+        # Group by week and calculate average sentiment
+        try:
+            comments_data['date'] = pd.to_datetime(comments_data['date'])
+            if len(comments_data) > 1:  # Only create trend if we have multiple data points
+                weekly_sentiment = comments_data.groupby(pd.Grouper(key='date', freq='W'))['sentiment'].mean().reset_index()
+                
+                if not weekly_sentiment.empty and len(weekly_sentiment) > 0:
+                    fig_trend = px.line(
+                        weekly_sentiment,
+                        x='date',
+                        y='sentiment',
+                        markers=True,
+                        title='Sentiment Trend'
+                    )
+                    fig_trend.add_hline(y=0, line_color='gray', line_dash='dash', opacity=0.7)
+                    fig_trend.update_layout(
+                        xaxis_title='Week',
+                        yaxis_title='Avg Sentiment',
+                        width=600,
+                        height=400
+                    )
+                    plots['sentiment_trend'] = get_plotly_url(fig_trend)
+        except Exception as e:
+            logger.error(f"Error creating sentiment trend: {e}")
         
         # Create emotional content bar chart with Plotly
         emotion_data = {emotion: sum(comments_data[emotion]) for emotion in emotions}
-        emotion_df = pd.DataFrame({'emotion': list(emotion_data.keys()), 'frequency': list(emotion_data.values())})
-        fig_emotions = px.bar(
-            emotion_df,
-            x='frequency',
-            y='emotion',
-            orientation='h',
-            title='Emotional Content'
-        )
-        fig_emotions.update_layout(
-            xaxis_title='Frequency',
-            yaxis_title='',
-            width=600,
-            height=400
-        )
-        plots['emotional_content'] = get_plotly_url(fig_emotions)
+        if any(val > 0 for val in emotion_data.values()):
+            emotion_df = pd.DataFrame({'emotion': list(emotion_data.keys()), 'frequency': list(emotion_data.values())})
+            fig_emotions = px.bar(
+                emotion_df,
+                x='frequency',
+                y='emotion',
+                orientation='h',
+                title='Emotional Content'
+            )
+            fig_emotions.update_layout(
+                xaxis_title='Frequency',
+                yaxis_title='',
+                width=600,
+                height=400
+            )
+            plots['emotional_content'] = get_plotly_url(fig_emotions)
         
         # Create sentiment by topic bar chart with Plotly
-        topic_sentiment = comments_data.groupby('topic')['sentiment'].mean().reset_index()
-        fig_topic_sentiment = px.bar(
-            topic_sentiment,
-            x='topic',
-            y='sentiment',
-            title='Sentiment by Topic'
-        )
-        fig_topic_sentiment.update_layout(
-            xaxis_title='Topic',
-            yaxis_title='Avg Sentiment',
-            width=600,
-            height=400
-        )
-        plots['sentiment_by_topic'] = get_plotly_url(fig_topic_sentiment)
+        try:
+            if len(comments_data) > 0 and not comments_data['topic'].empty:
+                topic_sentiment = comments_data.groupby('topic')['sentiment'].mean().reset_index()
+                fig_topic_sentiment = px.bar(
+                    topic_sentiment,
+                    x='topic',
+                    y='sentiment',
+                    title='Sentiment by Topic'
+                )
+                fig_topic_sentiment.update_layout(
+                    xaxis_title='Topic',
+                    yaxis_title='Avg Sentiment',
+                    width=600,
+                    height=400
+                )
+                plots['sentiment_by_topic'] = get_plotly_url(fig_topic_sentiment)
+        except Exception as e:
+            logger.error(f"Error creating sentiment by topic chart: {e}")
         
         # Create word cloud (keeping matplotlib for this since Plotly doesn't have a native wordcloud)
-        if comments_data['processed_text'].str.cat(sep=' '):  # Check if we have text to create wordcloud
-            all_text = ' '.join(comments_data['processed_text'])
-            wordcloud = WordCloud(width=600, height=400, background_color='white', colormap='viridis', 
-                                max_font_size=100, max_words=100).generate(all_text)
-            
-            plt.figure(figsize=(6, 4))
-            plt.imshow(wordcloud, interpolation='bilinear')
-            plt.axis('off')
-            plt.tight_layout()
-            plots['wordcloud'] = get_matplotlib_url()
+        processed_text = ' '.join(comments_data['processed_text'])
+        if processed_text.strip():  # Check if we have text to create wordcloud
+            try:
+                wordcloud = WordCloud(width=600, height=400, background_color='white', colormap='viridis', 
+                                    max_font_size=100, max_words=100).generate(processed_text)
+                
+                plt.figure(figsize=(6, 4))
+                plt.imshow(wordcloud, interpolation='bilinear')
+                plt.axis('off')
+                plt.tight_layout()
+                plots['wordcloud'] = get_matplotlib_url()
+            except Exception as e:
+                logger.error(f"Error creating wordcloud: {e}")
+                
     except Exception as e:
         logger.error(f"Error generating plots: {e}")
     
@@ -400,28 +436,43 @@ def analyze():
         plots = generate_plots(comments_data)
         
         # Generate summary statistics
-        avg_sentiment = comments_data['sentiment'].mean()
-        sentiment_counts = {
-            'positive': len(comments_data[comments_data['sentiment'] > 0.05]),
-            'negative': len(comments_data[comments_data['sentiment'] < -0.05]),
-            'neutral': len(comments_data[(comments_data['sentiment'] >= -0.05) & (comments_data['sentiment'] <= 0.05)])
-        }
+        summary = {}
         
-        feedback_counts = comments_data['feedback_type'].value_counts().to_dict()
-        topic_counts = comments_data['topic'].value_counts().to_dict()
-        
-        # Calculate most frequent emotions
-        emotions_sum = {emotion: comments_data[emotion].sum() for emotion in emotions}
-        dominant_emotion = max(emotions_sum, key=emotions_sum.get) if any(emotions_sum.values()) else "None"
-        
-        summary = {
-            'total_comments': len(comments_data),
-            'avg_sentiment': avg_sentiment,
-            'sentiment_counts': sentiment_counts,
-            'feedback_counts': feedback_counts,
-            'topic_counts': topic_counts,
-            'dominant_emotion': dominant_emotion
-        }
+        try:
+            # Only calculate statistics if there's data
+            if len(comments_data) > 0:
+                avg_sentiment = comments_data['sentiment'].mean() if not comments_data.empty else 0
+                sentiment_counts = {
+                    'positive': len(comments_data[comments_data['sentiment'] > 0.05]),
+                    'negative': len(comments_data[comments_data['sentiment'] < -0.05]),
+                    'neutral': len(comments_data[(comments_data['sentiment'] >= -0.05) & (comments_data['sentiment'] <= 0.05)])
+                }
+                
+                feedback_counts = comments_data['feedback_type'].value_counts().to_dict() if not comments_data.empty else {}
+                topic_counts = comments_data['topic'].value_counts().to_dict() if not comments_data.empty else {}
+                
+                # Calculate most frequent emotions
+                emotions_sum = {emotion: comments_data[emotion].sum() for emotion in emotions}
+                dominant_emotion = max(emotions_sum, key=emotions_sum.get) if any(emotions_sum.values()) else "None"
+                
+                summary = {
+                    'total_comments': len(comments_data),
+                    'avg_sentiment': avg_sentiment,
+                    'sentiment_counts': sentiment_counts,
+                    'feedback_counts': feedback_counts,
+                    'topic_counts': topic_counts,
+                    'dominant_emotion': dominant_emotion
+                }
+        except Exception as e:
+            logger.error(f"Error calculating summary statistics: {e}")
+            summary = {
+                'total_comments': len(comments_data),
+                'avg_sentiment': 0,
+                'sentiment_counts': {'positive': 0, 'negative': 0, 'neutral': 0},
+                'feedback_counts': {},
+                'topic_counts': {},
+                'dominant_emotion': "None"
+            }
         
         logger.info(f"Analysis complete: {len(comments_data)} comments processed")
         return render_template('results.html', 
@@ -445,9 +496,6 @@ def internal_server_error(error):
     """Handle internal server error."""
     flash('An internal server error occurred. Please try again.', 'error')
     return redirect(url_for('index'))
-
-# Add these route functions to your app.py file, below the existing routes
-# but before the if __name__ == '__main__' statement
 
 @app.route('/about')
 def about():
@@ -486,5 +534,26 @@ def submit_contact():
         flash('An error occurred while sending your message. Please try again.', 'error')
         return redirect(url_for('contact'))
 
+@app.route('/health')
+def health_check():
+    """Simple health check endpoint for monitoring."""
+    return jsonify({"status": "healthy", "timestamp": datetime.datetime.now().isoformat()})
+
+@app.route('/debug/nltk')
+def debug_nltk():
+    """Debug endpoint to check NLTK resources."""
+    try:
+        nltk_status = {
+            "nltk_data_path": nltk.data.path,
+            "punkt_available": nltk.data.find('tokenizers/punkt') is not None,
+            "stopwords_available": nltk.data.find('corpora/stopwords') is not None,
+            "vader_available": nltk.data.find('sentiment/vader_lexicon') is not None
+        }
+        return jsonify(nltk_status)
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Use PORT environment variable for Render.com compatibility
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
