@@ -18,6 +18,12 @@ import datetime
 import json
 import matplotlib.pyplot as plt
 import logging
+import nltk
+
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, 
