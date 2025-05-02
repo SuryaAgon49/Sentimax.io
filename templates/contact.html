@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact SentiMax</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container my-5">
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <div class="card shadow">
+                    <div class="card-body">
+                        <h1 class="card-title text-center mb-4">Contact Us</h1>
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-body">
+                                        <h3 class="card-title">Contact Information</h3>
+                                        <p><strong>Email:</strong> info@sentimax.com</p>
+                                        <p><strong>Phone:</strong> +1 (555) 123-4567</p>
+                                        <p><strong>Address:</strong> 123 Analytics Way, Data City, DA 12345</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h3 class="card-title">Developer Contact</h3>
+                                        <p><strong>Surya Pratap Singh</strong></p>
+                                        <p><strong>Email:</strong> agon7268@gmail.com</p>
+                                        <p><strong>Phone:</strong> 7268902449</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card-text">
+                            <h2>Send Us a Message</h2>
+                            <form id="contactForm" action="{{ url_for('submit_contact') }}" method="POST">
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Full Name</label>
+                                    <input type="text" class="form-control" id="name" name="name" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="email" class="form-label">Email Address</label>
+                                    <input type="email" class="form-control" id="email" name="email" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="subject" class="form-label">Subject</label>
+                                    <input type="text" class="form-control" id="subject" name="subject" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="message" class="form-label">Message</label>
+                                    <textarea class="form-control" id="message" name="message" rows="5" required></textarea>
+                                </div>
+                                <div class="text-center">
+                                    <button type="submit" class="btn btn-primary">Send Message</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <section class="features">
+        <h3>Key Features</h3>
+        <div class="feature-cards">
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h4>Sentiment Analytics</h4>
+                <p>Analyze the emotional tone of comments with advanced sentiment scoring.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📈</div>
+                <h4>Visual Dashboards</h4>
+                <p>Generate interactive charts and graphs to visualize sentiment trends.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔍</div>
+                <h4>Topic Classification</h4>
+                <p>Automatically categorize comments into relevant topic areas.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">💬</div>
+                <h4>Text Analytics</h4>
+                <p>Identify key words, phrases, and emotional content in text data.</p>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer>
+    <p>&copy; 2025 Sentimax. All rights reserved.</p>
+</footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

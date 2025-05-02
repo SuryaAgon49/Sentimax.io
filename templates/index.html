@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentimax - Sentiment Analysis Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>Sentimax</h1>
+                <p>Powered by Surya AI</p>
+            </div>
+            <nav>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('index') }}">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('about') }}">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('contact') }}">Contact</a>
+                    </li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <section class="hero">
+                <div class="hero-content">
+                    <h2>Advanced Sentiment Analysis</h2>
+                    <p>Upload text files or paste comments to generate comprehensive sentiment analytics and visualization dashboards.</p>
+                </div>
+                <div class="hero-image">
+                    <img src="{{ url_for('static', filename='images/sentiment_analysis.svg') }}" alt="Sentiment Analysis Illustration">
+                </div>
+            </section>
+
+            <section class="analysis-form">
+                <div class="card">
+                    <h3>Upload Data for Analysis</h3>
+                    
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <form action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label for="file">Upload Text File (.txt)</label>
+                            <input type="file" id="file" name="file" accept=".txt">
+                            <p class="hint">Or paste your comments below</p>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="text_input">Paste Comments</label>
+                            <textarea id="text_input" name="text_input" rows="10" placeholder="Enter or paste your comments here. One comment per line."></textarea>
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Analyze</button>
+                            <button type="reset" class="btn-secondary">Clear</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section class="features">
+                <h3>Key Features</h3>
+                <div class="feature-cards">
+                    <div class="feature-card">
+                        <div class="feature-icon">📊</div>
+                        <h4>Sentiment Analytics</h4>
+                        <p>Analyze the emotional tone of comments with advanced sentiment scoring.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📈</div>
+                        <h4>Visual Dashboards</h4>
+                        <p>Generate interactive charts and graphs to visualize sentiment trends.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔍</div>
+                        <h4>Topic Classification</h4>
+                        <p>Automatically categorize comments into relevant topic areas.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">💬</div>
+                        <h4>Text Analytics</h4>
+                        <p>Identify key words, phrases, and emotional content in text data.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Sentimax. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+</html>
